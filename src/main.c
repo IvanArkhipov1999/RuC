@@ -30,7 +30,13 @@ const char *name = "../tests/executable/floatsign.c";
 
 int main(int argc, const char *argv[])
 {
-	printf("\x1B[0m"); // Not working without using printf
+	printf("\x1B[1;32mvictor@VIRTUAL\x1B[0m:\x1B[1;34m~/ruc/tests/executable/include/cmake\x1B[0m$ ");
+	for (int i = 0; i < argc; i++)
+	{
+		printf("%s ", argv[i]);
+	}
+	printf("\n");
+	//printf("\x1B[0m"); // Not working without using printf
 
 	if (argc < 2)
 	{
