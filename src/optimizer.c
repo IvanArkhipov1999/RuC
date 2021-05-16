@@ -16,6 +16,8 @@
 
 #include "global_vars.h"
 
+extern void tablesandtree();
+
 /**
  *	Размер дерева, используется для ускорения вставки и удаления узлов
  */
@@ -631,12 +633,159 @@ void optimize_for_statement()
 	}
 }
 
+void unswitch_loop(int for_tc, int if_tc, int else_tc)
+{
+	int if_start = mtc;
+	mtotree(TIf);
+	mtotree(0); // Тут не важен индекс, важно только равенство-неравенство нулю
+
+	// Копируем условие оператора if
+	for (int expr_tc = if_tc + 2; tree[expr_tc] != TExprend; expr_tc++) mtotree(tree[expr_tc]);
+	mtotree(TExprend);
+
+	int for_start = mtc;
+	int then_tc = for_tc+2;
+	int ind_correction = index_correction;
+	mtotree(TFor);
+	mtotree(0);
+	mtotree(tree[then_tc++] + ind_correction);
+	mtotree(tree[then_tc++] + ind_correction);
+	mtotree(tree[then_tc++] + ind_correction);
+	mtotree(tree[then_tc++] + ind_correction);
+
+
+	// Копируем цикл до начала того самого оператора if
+	for (; then_tc != if_tc; then_tc++) mtotree(tree[then_tc]);
+
+	// Пропускаем условие внутреннего if
+	do then_tc++; while (tree[then_tc] != TExprend);
+
+	// Копируем then-часть того самого if
+	for (then_tc++; tree[then_tc] != TEnd; then_tc++) mtotree(tree[then_tc]);
+
+	// Пропускаем else-часть того самого if
+	do then_tc++; while (tree[then_tc] != TEnd);
+
+	// Копируем часть цикла после того самого оператора if
+	for (; tree[then_tc] != TForEnd; then_tc++) mtotree(tree[then_tc]);
+
+	if (else_tc)
+	{
+		mtree[if_start+1] = mtc + 1;
+		mtotree(TForEnd);
+		int for_start = mtc;
+		int then_tc = for_tc+2;
+		int ind_correction = index_correction;
+		mtotree(TFor);
+		mtotree(0);
+		mtotree(tree[then_tc++] + ind_correction);
+		mtotree(tree[then_tc++] + ind_correction);
+		mtotree(tree[then_tc++] + ind_correction);
+		mtotree(tree[then_tc++] + ind_correction);
+
+		// Копируем цикл до начала того самого оператора if
+		for (; then_tc != if_tc; then_tc++) mtotree(tree[then_tc]);
+
+		// Пропускаем условие внутреннего if
+		do then_tc++; while (tree[then_tc] != TExprend);
+
+		// Пропускаем then-часть того самого if
+		do then_tc++; while (tree[then_tc] != TEnd);
+
+		// Копируем else-часть того самого if
+		for (then_tc++; tree[then_tc] != TEnd; then_tc++) mtotree(tree[then_tc]);
+
+		// Копируем часть цикла после того самого оператора if
+		for (; tree[then_tc] != TForEnd; then_tc++) mtotree(tree[then_tc]);
+	}
+
+	while (tree[tc] != TForEnd) tc++;
+	index_correction = mtc - tc;
+}
+
+int try_unswitch_loop()
+{
+	int has_nested_for = 0;
+	for_start = tc;
+
+	if (check_nested_for)
+	{
+		int temp_tc = tc + 2;
+		while (tree[temp_tc] != TForEnd)
+		{
+			if (tree[temp_tc] == TFor)
+			{
+				return 0;
+			}
+			temp_tc++;
+		}
+	}
+
+	// Здесь коррекция индексов нужна, потому что выражения проверяются в изначальном дереве
+	int statement = tree[for_start + 5];
+
+	// Ищем в цикле оператор if, который можно разомкнуть
+	for (int local_tc = statement; tree[local_tc] != TEnd; local_tc++)
+	{
+		if (tree[local_tc] == TIf)
+		{
+			// Так как запрещены вырезки и вызовы, можно не бояться встретить ветвление
+			// и идти до TExprend
+			int cond_end = local_tc;
+			while (tree[cond_end] != TExprend) cond_end++;
+			if (check_constant_expression(local_tc + 2, cond_end))
+			{
+				unswitch_loop(for_start, local_tc, tree[local_tc + 1]);
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 
 /** Применить оптимизации к дереву */
 void optimize()
 {
+	if (enable_unswitch_loop)
+	{
+		// Первый проход для размыкания цикла
+		tree_size = tc;
+		tc = mtc = 0;
+		index_correction = 0;
+
+		// Это начальное заполнение таблицы индуцированных переменных
+		// На самом деле это костыль, но лень пока придумывать что-то другое
+		ind_vars[1] = 0;
+		ind_vars[2] = 0;
+		ind_vars[3] = TExprend;
+
+		// В рамках данной работы оптимизируем только циклы for
+		while (tc < tree_size)
+			if (tree[tc] == TFor)
+			{
+				if (!try_unswitch_loop())
+				{
+					mcopy();
+				}
+			}
+			else
+				mcopy();
+
+		for (int i=0; i<mtc; i++)
+			tree[i] = mtree[i];
+
+		output = fopen("unswitched.txt", "wt");
+		tc = mtc;
+		tablesandtree();
+		fclose(output);                   // файл с деревом после оптимизаций
+	}
+
+	// Второй проход для всего остального
 	tree_size = tc;
 	tc = mtc = 0;
+	index_correction = 0;
 
 	// Это начальное заполнение таблицы индуцированных переменных
 	// На самом деле это костыль, но лень пока придумывать что-то другое

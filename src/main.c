@@ -22,7 +22,7 @@
 #include "defs.h"
 
 
-const char *name = "/home/ivan-arhipych/RuC/tests/mips/optimizations/ind_var/test_dyn2.c";
+const char *name = "/Users/elias/test.c";
 
 
 // Определение глобальных переменных
@@ -61,6 +61,7 @@ int cycle_condition_calculation = 1;
 int delay_slot = 1;
 int check_nested_for;
 int ind_var_reduction = 1;
+int enable_unswitch_loop = 1;
 
 extern void preprocess_file();
 
@@ -116,7 +117,7 @@ int main(int argc, const char * argv[])
 {
     int i;
 
-	check_nested_for = cycle_condition_calculation || enable_ind_var || ind_var_reduction;
+	check_nested_for = cycle_condition_calculation || enable_ind_var || ind_var_reduction || enable_unswitch_loop;
 
     if (argc != 2){
         printf("Error: not enough argumnts\n");

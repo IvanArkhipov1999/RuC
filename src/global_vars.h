@@ -46,6 +46,6 @@ extern int anst, anstdispl, ansttype, leftansttype;
 
 extern int bad_printf_placeholder;
 
-extern int cycle_jump_reduce, check_nested_for, enable_ind_var, delay_slot, cycle_condition_calculation, ind_var_reduction;
+extern int cycle_jump_reduce, check_nested_for, enable_ind_var, delay_slot, cycle_condition_calculation, ind_var_reduction, enable_unswitch_loop;
 
 extern int defarr[MAXIDENTAB];
