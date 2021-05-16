@@ -51,6 +51,7 @@ int cond_cycle_end_manst = 0;
 int cond_cycle_end_manst_left = 0;
 int cond_cycle_end_left_reg = 0;
 int delay_slot_inc = 1; // если ++ в цикле, то 1, если -- в цикле, то -1
+int left_reg_cond = -1; // левый регистр в случае редукции индуцированных переменных
 // унарные операции LNOT, LOGNOT, -, ++, --, TIdenttoval(*), TIdenttoaddr(&)
 // LNOT nor rd, rs, d0    LOGNOT slti rt, rs, 1   - sub rd, d0, rt
 // *  lw rt, displ(rs) или сразу 0(areg)   & addi rt, areg, adispl или сразу areg
@@ -128,12 +129,17 @@ int isregsf(int r)
 struct ind_var
 {
 	int id;
+	int is_static;
 	int step;
 	int reg;
 };
 
 struct ind_var ind_var_info[10];
 int ind_var_number;
+
+int cur_dyn_arr_info[5];	// информация текущего объявляемого массива
+int is_dyn;					// является ли текущий объявляемый массив динамическим
+int dyn_arr_info[10000][5]; // доступ к информации осуществляется по displ, хранятся смещение относительно gp, где в памяти хранится граница
 
 void merror(int type)
 {
@@ -858,6 +864,15 @@ void MBin_operation(int c)      // бинарная операция (два в�
         leftdispl = adispl;
         leftreg = areg;
         leftnum = num;
+        if (left_reg_cond == 0)
+        {
+        	left_reg_cond = lopnd;
+        }
+        else if (left_reg_cond != -1)
+        {
+        	lopnd = left_reg_cond;
+        	left_reg_cond = -1;
+        }
 
         mbox = BF;
         if (flag_cond_cycle != 2)
@@ -1992,6 +2007,14 @@ void MPrimary()
                 tocodeLI_S(li_d, areg, numdouble);
             	manst = AREG;
                 break;
+            case TDynArrBound:
+            {
+            	int displ = tree[tc++], dim = tree[tc++];
+            	areg = mbox <= 2 ? breg : t1;
+            	manst = AREG;
+            	tocodeB(lw, areg, dyn_arr_info[displ][dim-1], gp);
+            }
+            	break;
             case TString:
             case TStringc:
             case TStringf:
@@ -2240,6 +2263,7 @@ void MDeclarr()
         MExpr_gen();
         if (manst == CONST)
         {
+        	is_dyn = 0;
             if (num < 0)
             {
                 tocodeI(addi, a0, d0, wrong_number_of_elems);
@@ -2252,6 +2276,10 @@ void MDeclarr()
         }
         else
         {
+        	// сохранение информации для оптимизации индуцированных переменных
+        	cur_dyn_arr_info[i] = displ;
+        	is_dyn = 1;
+        	
             tocodeJC(bgez, t0, "DECLARR", labnum);
             tocodeI(addi, a0, d0, wrong_number_of_elems);
             tocodeJ(jal, "ERROR", -1);
@@ -2393,6 +2421,8 @@ void MStmt_gen()
             int oldbreak = adbreak, oldcont = adcont, incrtc, endtc;
             int cond_reg;
             mbox = BV;
+            if (is_last_nested == 3)
+            	left_reg_cond = 0;
             if (fromref)
                 MExpr_gen();         // init
             int for_value_reg = areg;	 // for delay slot
@@ -2422,7 +2452,20 @@ void MStmt_gen()
 						mbox = BF;
 						MExpr_gen(); // Шаг;
 						if (manst == CONST)
+						{
+							ind_var_info[ind_var_number - 1].is_static = 1;
 							ind_var_info[ind_var_number - 1].step = num;
+						}
+						else
+						{
+							tocodemove(t0 + 7, areg);
+							areg = t0 + 7;
+							tocodeI(addi, areg, areg, 1);
+							tocodeI(addi, t1, d0, 4);
+							tocodeR(mul, areg, areg, t1);
+							ind_var_info[ind_var_number - 1].is_static = 0;
+							ind_var_info[ind_var_number - 1].step = areg;
+						}
 						mbox = BREG;
 						MExpr_gen(); // TSliceident
 						ind_var_info[ind_var_number - 1].reg = areg;
@@ -2436,11 +2479,34 @@ void MStmt_gen()
                     tc = incrref;
                     delay_slot_inc = 0;
                     int cond = cond_reg;
-                    MExpr_gen();         // incr
+                    if (is_last_nested != 3)
+                    	MExpr_gen();         // incr
+                    else
+                    {
+                        tocodemove(left_reg_cond, cond_reg);
+                        if (ind_var_info[0].is_static)
+                        {
+							if (ind_var_info[0].step == 1)
+								tocodeI(addi, t1, d0, ind_var_info[0].step * 4);
+							else
+								tocodeI(addi, t1, d0, -(ind_var_info[0].step + 1) * 4);
+                        }
+                        else
+                        {
+                        	tocodeI(addi, t1, d0, -4);
+                        	tocodeR(mul, t1, t1, ind_var_info[0].step);
+                        }
+                    	tocodeR(mul, cond, cond, t1);
+                    	tocodeR(add, cond, cond, ind_var_info[0].reg);
+                    	left_reg_cond = ind_var_info[0].reg;
+                    }
                     tc = endtc;
 
-                	tocodeI(addi, for_value_reg, for_value_reg, -delay_slot_inc); // тут иногда 1
-                	tocodeI(addi, cond, cond, -delay_slot_inc); // тут иногда 1
+                    if (is_last_nested != 3)
+                    {
+						tocodeI(addi, for_value_reg, for_value_reg, -delay_slot_inc); // тут иногда 1
+						tocodeI(addi, cond, cond, -delay_slot_inc); // тут иногда 1
+                    }
                 }
                 flag_cond_cycle = 0;
                 breg = oldbreg;
@@ -2492,7 +2558,19 @@ void MStmt_gen()
                 if (enable_ind_var)
                 {
                 	for (int i = 0; i < ind_var_number; i++)
-                		tocodeI(addi, ind_var_info[i].reg, ind_var_info[i].reg, ind_var_info[i].step * 4);
+                	{
+                		if (ind_var_info[i].is_static)
+                		{
+							if (ind_var_info[i].step == 1)
+								tocodeI(addi, ind_var_info[i].reg, ind_var_info[i].reg, ind_var_info[i].step * 4);
+							else
+								tocodeI(addi, ind_var_info[i].reg, ind_var_info[i].reg, -(ind_var_info[i].step + 1) * 4);
+                		}
+                		else
+                		{
+                			tocodeR(sub, ind_var_info[i].reg, ind_var_info[i].reg, ind_var_info[i].step);
+                		}
+                	}
                 }
                 MExpr_gen();         // cond
                 flag_jump_end_cycle = 0;
@@ -2501,7 +2579,7 @@ void MStmt_gen()
                 if (cycle_condition_calculation && is_last_nested)
                 	freereg(cond_reg);
             }
-        	if (cycle_condition_calculation && delay_slot && is_last_nested)
+        	if (cycle_condition_calculation && delay_slot && is_last_nested && is_last_nested != 3)
         		tocodeI(addi, cond_reg, cond_reg, delay_slot_inc); // тут иногда -1
         tocodeL("end", adbreak);
         tocodeL("ELSE", adbreak);
@@ -2941,6 +3019,11 @@ void MDeclid_gen()
     }
     else                                // Обработка массива int a[N1]...[NN] =
     {
+    	if (is_dyn) // сохранение информации о динамическом массиве
+    	{
+    		for (int i = 0; i < 5; i++)
+    			dyn_arr_info[identab[oldid + 3]][i] = cur_dyn_arr_info[i];
+    	}
         tocodeI(addi, a0, d0, all == 0 ? N : N-1);
         tocodeI(addi, a1, d0, element_len);
         tocodeI(addi, a2, d0, ardispl);
