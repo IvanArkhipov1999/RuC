@@ -15,6 +15,7 @@
  */
 
 #include "llvmgen.h"
+#include "defs.h"
 #include "errors.h"
 #include "llvmopt.h"
 #include "tree.h"
@@ -1760,6 +1761,6 @@ int encode_to_llvm(const workspace *const ws, universal_io *const io, syntax *co
 	{
 		return -1;
 	}
-
+	
 	return codegen(io, sx);
 }
