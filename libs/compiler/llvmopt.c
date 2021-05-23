@@ -49,6 +49,7 @@ typedef struct information
 
 	node_info stack[MAX_STACK_SIZE];					/**< Стек для преобразования выражений */
 	size_t stack_size;									/**< Размер стека */
+	size_t last_depth;									/**< Глубина верхнего узла в стеке */
 } information;
 
 
@@ -337,6 +338,13 @@ static int node_recursive(information *const info, node *const nd)
 
 			default:
 			{
+				// если уже в переставленных, то с ними ничего делать не надо
+				if (info->last_depth > 1)
+				{
+					info->last_depth--;
+					break;
+				}
+
 				node_info nd_info = { nd, i, 1 };
 
 				// перестановка узлов выражений
@@ -360,6 +368,7 @@ static int node_recursive(information *const info, node *const nd)
 
 						// перестановка с операндом
 						has_error |= transposition(operand, &nd_info);
+						info->last_depth = operand->depth;
 
 						// добавляем в стек переставленное выражение
 						has_error |=  stack_push(info, operand);
@@ -382,6 +391,7 @@ static int node_recursive(information *const info, node *const nd)
 
 						// перестановка с первым операндом
 						has_error |= transposition(first, second);
+						info->last_depth = first->depth;
 
 						// добавляем в стек переставленное выражение
 						has_error |= stack_push(info, first);
@@ -410,6 +420,7 @@ static int optimize_pass(universal_io *const io, syntax *const sx)
 	info.string_num = 1;
 	info.was_printf = 0;
 	info.stack_size = 0;
+	info.last_depth = 1;
 
 	node nd = node_get_root(&sx->tree);
 	for (size_t i = 0; i < node_get_amount(&nd); i++)

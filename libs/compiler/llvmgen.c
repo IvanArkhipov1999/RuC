@@ -15,6 +15,7 @@
  */
 
 #include "llvmgen.h"
+#include "codes.h"
 #include "defs.h"
 #include "errors.h"
 #include "llvmopt.h"
@@ -1761,6 +1762,7 @@ int encode_to_llvm(const workspace *const ws, universal_io *const io, syntax *co
 	{
 		return -1;
 	}
+	tables_and_tree("tree1.txt", &(sx->predef), &(sx->modes), &(sx->tree));
 	
 	return codegen(io, sx);
 }
