@@ -15,15 +15,14 @@
  */
 
 #include "compiler.h"
-#include "parser.h"
+#include <stdlib.h>
+#include <string.h>
 #include "codegen.h"
 #include "errors.h"
-#include "llvmgen.h"
+#include "parser.h"
 #include "preprocessor.h"
 #include "syntax.h"
 #include "uniio.h"
-#include <stdlib.h>
-#include <string.h>
 
 #ifndef _MSC_VER
 	#include <sys/stat.h>
@@ -139,10 +138,6 @@ int compile(workspace *const ws)
 		{
 			return compile_to_vm(ws);
 		}
-		else if (strcmp(flag, "-LLVM") == 0)
-		{
-			return compile_to_llvm(ws);
-		}
 	}
 }
 
@@ -162,17 +157,6 @@ int compile_to_vm(workspace *const ws)
 	return ret;
 }
 
-int compile_to_llvm(workspace *const ws)
-{
-	if (ws_get_output(ws) == NULL)
-	{
-		ws_set_output(ws, DEFAULT_LLVM);
-	}
-
-	return compile_from_ws(ws, &encode_to_llvm);
-}
-
-
 
 int auto_compile(const int argc, const char *const *const argv)
 {
@@ -184,12 +168,6 @@ int auto_compile_to_vm(const int argc, const char *const *const argv)
 {
 	workspace ws = ws_parse_args(argc, argv);
 	return compile_to_vm(&ws);
-}
-
-int auto_compile_to_llvm(const int argc, const char *const *const argv)
-{
-	workspace ws = ws_parse_args(argc, argv);
-	return compile_to_llvm(&ws);
 }
 
 
@@ -210,17 +188,4 @@ int no_macro_compile_to_vm(const char *const path)
 	}
 
 	return ret;
-}
-
-int no_macro_compile_to_llvm(const char *const path)
-{
-	universal_io io = io_create();
-	in_set_file(&io, path);
-
-	workspace ws = ws_create();
-	ws_add_file(&ws, path);
-	ws_set_output(&ws, DEFAULT_LLVM);
-	out_set_file(&io, ws_get_output(&ws));
-
-	return compile_from_io(&ws, &io, &encode_to_llvm);
 }
