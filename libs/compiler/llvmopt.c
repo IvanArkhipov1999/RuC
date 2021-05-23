@@ -50,6 +50,8 @@ typedef struct information
 	node_info stack[MAX_STACK_SIZE];					/**< Стек для преобразования выражений */
 	size_t stack_size;									/**< Размер стека */
 	size_t last_depth;									/**< Глубина верхнего узла в стеке */
+	size_t slice_depth;									/**< Количество узлов после TSliceident */
+	size_t slice_stack_size;							/**< Размер стека в начале вырезки */
 } information;
 
 
@@ -74,9 +76,9 @@ static inline node_info *stack_pop(information *const info)
 	return &info->stack[--info->stack_size];
 }
 
-static inline void stack_clear(information *const info)
+static inline void stack_clear(information *const info, const int mode)
 {
-	info->stack_size = 0;
+	info->stack_size = mode;
 }
 
 
@@ -112,6 +114,7 @@ static expression_t expression_type(node *const nd)
 		case TConstd:
 		case TIdenttovald:
 		case TCall1:
+		case TSliceident:
 			return OPERAND;
 
 
@@ -276,6 +279,11 @@ static int node_recursive(information *const info, node *const nd)
 {
 	int has_error = 0;
 
+	if (info->slice_depth != 0)
+	{
+		info->slice_depth++;
+	}
+
 	for (size_t i = 0; i < node_get_amount(nd); i++)
 	{
 		node child = node_get_child(nd, i);
@@ -333,7 +341,20 @@ static int node_recursive(information *const info, node *const nd)
 
 			case TExprend:
 				// если конец выражения, то очищаем стек
-				stack_clear(info);
+				if (info->slice_depth == 0)
+				{
+					stack_clear(info, 0);
+				}
+				else // TODO: почему сюда идёт 2 раза???
+				{
+					stack_clear(info, info->slice_stack_size);
+
+					node_info *slice_info = stack_pop(info);
+
+					slice_info->depth = info->slice_depth;
+					stack_push(info, slice_info);
+					info->slice_depth = 0;
+				}
 				break;
 
 			default:
@@ -379,6 +400,7 @@ static int node_recursive(information *const info, node *const nd)
 						node_info *second = stack_pop(info);
 						node_info *first = stack_pop(info);
 
+						// TODO: надо ещё TAddrtoval обработать
 						// перестановка со вторым операндом
 						has_error |= transposition(second, &nd_info);
 
@@ -404,6 +426,12 @@ static int node_recursive(information *const info, node *const nd)
 			break;
 		}
 
+		if (node_get_type(&child) == TSliceident)
+		{
+			info->slice_depth = 1;
+			info->slice_stack_size = info->stack_size;
+		}
+
 		if (has_error || node_recursive(info, &child))
 		{
 			return has_error;
@@ -421,6 +449,8 @@ static int optimize_pass(universal_io *const io, syntax *const sx)
 	info.was_printf = 0;
 	info.stack_size = 0;
 	info.last_depth = 1;
+	info.slice_depth = 0;
+	info.slice_stack_size = 0;
 
 	node nd = node_get_root(&sx->tree);
 	for (size_t i = 0; i < node_get_amount(&nd); i++)
