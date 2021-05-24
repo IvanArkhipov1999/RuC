@@ -486,7 +486,7 @@ static void to_code_slice(information *const info, const item_t id, const item_t
 	{
 		uni_printf(info->io, "%%.");
 	}
-	
+
 	uni_printf(info->io, "%" PRIitem "\n", num);
 	info->register_num++;
 }
@@ -1358,6 +1358,11 @@ static void expression(information *const info, node *const nd)
 		default:
 			operand(info, nd);
 			break;
+	}
+
+	if (node_get_type(nd) == TAddrtoval)
+	{
+		node_set_next(nd);
 	}
 
 	if (node_get_type(nd) == TExprend)

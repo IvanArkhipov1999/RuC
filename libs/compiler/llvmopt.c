@@ -50,6 +50,7 @@ typedef struct information
 	node_info stack[MAX_STACK_SIZE];					/**< Стек для преобразования выражений */
 	size_t stack_size;									/**< Размер стека */
 	size_t last_depth;									/**< Глубина верхнего узла в стеке */
+	// TODO: а если в выражении вырезки есть вырезка, надо обдумать и этот случай
 	size_t slice_depth;									/**< Количество узлов после TSliceident */
 	size_t slice_stack_size;							/**< Размер стека в начале вырезки */
 } information;
@@ -393,6 +394,12 @@ static int node_recursive(information *const info, node *const nd)
 					{
 						node_info *operand = stack_pop(info);
 
+						if (node_get_type(nd_info.parent) == TAddrtoval)
+						{
+							node_info log_info = { nd_info.parent, 1, 1 };
+							has_error |= transposition(&nd_info, &log_info);
+						}
+
 						// перестановка с операндом
 						has_error |= transposition(operand, &nd_info);
 						info->last_depth = operand->depth;
@@ -406,12 +413,18 @@ static int node_recursive(information *const info, node *const nd)
 						node_info *second = stack_pop(info);
 						node_info *first = stack_pop(info);
 
-						// TODO: надо ещё TAddrtoval обработать
+						if (node_get_type(nd_info.parent) == TAddrtoval)
+						{
+							node_info log_info = { nd_info.parent, 1, 1 };
+							has_error |= transposition(&nd_info, &log_info);
+						}
+
 						// перестановка со вторым операндом
 						has_error |= transposition(second, &nd_info);
 
 						// надо переставить second с родителем
-						if (node_get_type(second->parent) == ADLOGOR || node_get_type(second->parent) == ADLOGAND)
+						if (node_get_type(second->parent) == ADLOGOR || node_get_type(second->parent) == ADLOGAND 
+							|| node_get_type(second->parent) == TAddrtoval)
 						{
 							node_info log_info = { second->parent, 1, 1 };
 							has_error |= transposition(second, &log_info);
