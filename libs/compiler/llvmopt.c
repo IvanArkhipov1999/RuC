@@ -345,7 +345,8 @@ static int node_recursive(information *const info, node *const nd)
 				{
 					stack_clear(info, 0);
 				}
-				else // TODO: почему сюда идёт 2 раза???
+				// если вырезка не переставлена, то надо изменить глубину
+				else if (info->last_depth <= 1)
 				{
 					stack_clear(info, info->slice_stack_size);
 
@@ -354,6 +355,11 @@ static int node_recursive(information *const info, node *const nd)
 					slice_info->depth = info->slice_depth;
 					stack_push(info, slice_info);
 					info->slice_depth = 0;
+				}
+				// если вырезка переставлена, то надо учесть пропуск TExprend
+				else
+				{
+					info->last_depth--;
 				}
 				break;
 

@@ -361,22 +361,32 @@ static void to_code_operation_const_reg_double(information *const info, item_t t
 	uni_printf(info->io, " double %f, %%.%" PRIitem "\n", fst, snd);
 }
 
-static void to_code_load(information *const info, item_t result, item_t displ, type_t type)
+static void to_code_load(information *const info, item_t result, item_t displ, type_t type, item_t mode_array)
 {
 	uni_printf(info->io, " %%.%" PRIitem " = load ", result);
 	type_to_io(info->io, type);
 	uni_printf(info->io, ", ");
 	type_to_io(info->io, type);
-	uni_printf(info->io, "* %%var.%" PRIitem ", align 4\n", displ);
+	uni_printf(info->io, "* %%");
+	if (!mode_array)
+	{
+		uni_printf(info->io, "var");
+	}
+	uni_printf(info->io, ".%" PRIitem ", align 4\n", displ);
 }
 
-static void to_code_store_reg(information *const info, item_t reg, item_t displ, type_t type)
+static void to_code_store_reg(information *const info, item_t reg, item_t displ, type_t type, item_t mode_array)
 {
 	uni_printf(info->io, " store ");
 	type_to_io(info->io, type);
 	uni_printf(info->io, " %%.%" PRIitem ", ", reg);
 	type_to_io(info->io, type);
-	uni_printf(info->io, "* %%var.%" PRIitem ", align 4\n", displ);
+	uni_printf(info->io, "* %%");
+	if (!mode_array)
+	{
+		uni_printf(info->io, "var");
+	}
+	uni_printf(info->io, ".%" PRIitem ", align 4\n", displ);
 }
 
 static inline void to_code_store_const_i32(information *const info, item_t arg, item_t displ)
@@ -465,6 +475,21 @@ static void to_code_stack_load(information *const info)
 	uni_printf(info->io, " call void @llvm.stackrestore(i8* %%.%" PRIitem ")\n", info->register_num);
 	info->register_num++;
 }
+// TODO: сделать для больших размерностей и если вырезка не по константе
+static void to_code_slice(information *const info, const item_t id, const item_t num, const item_t reg_mode)
+{
+	uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds [%" PRIitem " x i32], "
+		"[%" PRIitem " x i32]* %%arr.%" PRIitem ", i32 0, i32 "
+		, info->register_num, info->arrays_info[id].borders[0], info->arrays_info[id].borders[0], id);
+
+	if (reg_mode)
+	{
+		uni_printf(info->io, "%%.");
+	}
+	
+	uni_printf(info->io, "%" PRIitem "\n", num);
+	info->register_num++;
+}
 
 
 static void check_type_and_branch(information *const info)
@@ -504,7 +529,7 @@ static void operand(information *const info, node *const nd)
 		{
 			const item_t displ = node_get_arg(nd, 0);
 
-			to_code_load(info, info->register_num, displ, I32);
+			to_code_load(info, info->register_num, displ, I32, 0);
 			info->answer_reg = info->register_num++;
 			info->answer_type = AREG;
 			info->answer_value_type = I32;
@@ -515,7 +540,7 @@ static void operand(information *const info, node *const nd)
 		{
 			const item_t displ = node_get_arg(nd, 0);
 
-			to_code_load(info, info->register_num, displ, DOUBLE);
+			to_code_load(info, info->register_num, displ, DOUBLE, 0);
 			info->answer_reg = info->register_num++;
 			info->answer_type = AREG;
 			info->answer_value_type = DOUBLE;
@@ -565,14 +590,36 @@ static void operand(information *const info, node *const nd)
 			break;
 		case TSliceident:
 		{
+			const item_t displ = node_get_arg(nd, 0);
+			const location_t location = info->variable_location;
+
 			node_set_next(nd);
+			info->variable_location = LFREE;
 			expression(info, nd);
+
+			if (info->answer_type == ACONST)
+			{
+				to_code_slice(info, displ, info->answer_const, 0);
+			}
+			else if (info->answer_type == AREG)
+			{
+				to_code_slice(info, displ, info->answer_reg, 1);
+			}
 
 			while (node_get_type(nd) == TSlice)
 			{
 				node_set_next(nd);
 				expression(info, nd);
 			}
+
+			if (location != LMEM)
+			{
+				to_code_load(info, info->register_num, info->register_num - 1, I32, 1);
+				info->register_num++;
+			}
+
+			info->answer_reg = info->register_num - 1;
+			info->answer_type = AREG;
 		}
 		break;
 		case TCall1:
@@ -661,11 +708,11 @@ static void assignment_expression(information *const info, node *const nd)
 	{
 		if (is_double(assignment_type))
 		{
-			to_code_load(info, info->register_num, displ, DOUBLE);
+			to_code_load(info, info->register_num, displ, DOUBLE, 0);
 		}
 		else
 		{
-			to_code_load(info, info->register_num, displ, I32);
+			to_code_load(info, info->register_num, displ, I32, 0);
 		}
 		
 		info->register_num++;
@@ -688,7 +735,7 @@ static void assignment_expression(information *const info, node *const nd)
 
 	if (info->answer_type == AREG || (assignment_type != ASS && assignment_type != ASSV && assignment_type != ASSR && assignment_type != ASSRV))
 	{
-		to_code_store_reg(info, result, displ, info->answer_value_type);
+		to_code_store_reg(info, result, displ, info->answer_value_type, 0);
 	}
 	else // ACONST && =
 	{
@@ -700,6 +747,26 @@ static void assignment_expression(information *const info, node *const nd)
 		{
 			to_code_store_const_double(info, info->answer_const_double, displ);
 		}
+	}
+}
+
+static void assignment_array_expression(information *const info, node *const nd)
+{
+	node_set_next(nd);
+	info->variable_location = LMEM;
+	operand(info, nd); // TSliceident
+	item_t memory_reg = info->answer_reg;
+
+	info->variable_location = LFREE;
+	expression(info, nd);
+
+	to_code_try_zext_to(info);
+
+	item_t result = info->answer_reg;
+
+	if (info->answer_type == AREG)
+	{
+		to_code_store_reg(info, result, memory_reg, info->answer_value_type, 1);
 	}
 }
 
@@ -883,7 +950,7 @@ static void inc_dec_expression(information *const info, node *const nd)
 		info->answer_value_type = I32;
 	}
 
-	to_code_load(info, info->register_num, displ, info->answer_value_type);
+	to_code_load(info, info->register_num, displ, info->answer_value_type, 0);
 	info->answer_type = AREG;
 	info->answer_reg = info->register_num++;
 	
@@ -914,7 +981,7 @@ static void inc_dec_expression(information *const info, node *const nd)
 			break;
 	}
 
-	to_code_store_reg(info, info->register_num, displ, info->answer_value_type);
+	to_code_store_reg(info, info->register_num, displ, info->answer_value_type, 0);
 	info->register_num++;
 }
 
@@ -1032,6 +1099,12 @@ static void binary_operation(information *const info, node *const nd)
 		case DIVASSR:
 		case DIVASSRV:
 			assignment_expression(info, nd);
+			break;
+
+
+		case ASSAT:
+		case ASSATV:
+			assignment_array_expression(info, nd);
 			break;
 
 
