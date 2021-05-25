@@ -280,7 +280,7 @@ static int node_recursive(information *const info, node *const nd)
 {
 	int has_error = 0;
 
-	if (info->slice_depth != 0)
+	if (info->slice_depth != 0 && info->last_depth <= 1)
 	{
 		info->slice_depth++;
 	}
@@ -288,6 +288,11 @@ static int node_recursive(information *const info, node *const nd)
 	for (size_t i = 0; i < node_get_amount(nd); i++)
 	{
 		node child = node_get_child(nd, i);
+
+		if (node_get_type(&child) == TBegin)
+		{
+			stack_clear(info, 0);
+		}
 
 		switch (node_get_type(&child))
 		{
@@ -344,7 +349,13 @@ static int node_recursive(information *const info, node *const nd)
 				// если конец выражения, то очищаем стек
 				if (info->slice_depth == 0)
 				{
-					stack_clear(info, 0);
+					// TODO: с вырезками не совсем понятно, до какого места в стеке нужно очищать выражения, поэтому так
+					// надо подумать, может если родитель tbegin, то очищать?
+					// stack_clear(info, info->slice_stack_size);
+					if (info->last_depth > 1)
+					{
+						info->last_depth--;
+					}
 				}
 				// если вырезка не переставлена, то надо изменить глубину
 				else if (info->last_depth <= 1)
@@ -362,11 +373,6 @@ static int node_recursive(information *const info, node *const nd)
 					slice_info->depth = info->slice_depth;
 					stack_push(info, slice_info);
 					info->slice_depth = 0;
-				}
-				// если вырезка переставлена, то надо учесть пропуск TExprend
-				else
-				{
-					info->last_depth--;
 				}
 				break;
 
@@ -451,7 +457,7 @@ static int node_recursive(information *const info, node *const nd)
 			break;
 		}
 
-		if (node_get_type(&child) == TSliceident)
+		if (node_get_type(&child) == TSliceident && info->last_depth <= 1)
 		{
 			info->slice_depth = 1;
 			info->slice_stack_size = info->stack_size;
