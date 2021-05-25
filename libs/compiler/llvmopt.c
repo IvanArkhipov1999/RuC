@@ -349,6 +349,12 @@ static int node_recursive(information *const info, node *const nd)
 				// если вырезка не переставлена, то надо изменить глубину
 				else if (info->last_depth <= 1)
 				{
+					node texprend_child = node_get_child(&child, 0);
+					if (node_get_type(&texprend_child) == TSlice)
+					{
+						break;
+					}
+
 					stack_clear(info, info->slice_stack_size);
 
 					node_info *slice_info = stack_pop(info);

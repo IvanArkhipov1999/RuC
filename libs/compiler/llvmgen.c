@@ -475,18 +475,50 @@ static void to_code_stack_load(information *const info)
 	uni_printf(info->io, " call void @llvm.stackrestore(i8* %%.%" PRIitem ")\n", info->register_num);
 	info->register_num++;
 }
-// TODO: сделать для больших размерностей и если вырезка не по константе
-static void to_code_slice(information *const info, const item_t id, const item_t num, const item_t reg_mode)
+
+static void to_code_slice(information *const info, const item_t id, const item_t num, const item_t cur_dimension, 
+							const item_t prev_slice, const item_t reg_mode)
 {
-	uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds [%" PRIitem " x i32], "
-		"[%" PRIitem " x i32]* %%arr.%" PRIitem ", i32 0, i32 "
-		, info->register_num, info->arrays_info[id].borders[0], info->arrays_info[id].borders[0], id);
+	uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds ", info->register_num);
+	// uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds [%" PRIitem " x i32], "
+	// 	"[%" PRIitem " x i32]* ", info->register_num, info->arrays_info[id].borders[0], info->arrays_info[id].borders[0]);
+	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+	{
+		uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
+	}
+	uni_printf(info->io, "i32");
+
+	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+	{
+		uni_printf(info->io, "]");
+	}
+	uni_printf(info->io, ", ");
+
+	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+	{
+		uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
+	}
+	uni_printf(info->io, "i32");
+
+	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+	{
+		uni_printf(info->io, "]");
+	}
+
+	if (info->arrays_info[id].dimention == cur_dimension)
+	{
+		uni_printf(info->io, "* %%arr.%" PRIitem, id);
+	}
+	else
+	{
+		uni_printf(info->io, "* %%.%" PRIitem, prev_slice);
+	}
+	uni_printf(info->io, ", i32 0, i32 ");
 
 	if (reg_mode)
 	{
 		uni_printf(info->io, "%%.");
 	}
-
 	uni_printf(info->io, "%" PRIitem "\n", num);
 	info->register_num++;
 }
@@ -592,6 +624,7 @@ static void operand(information *const info, node *const nd)
 		{
 			const item_t displ = node_get_arg(nd, 0);
 			const location_t location = info->variable_location;
+			item_t cur_dimension = info->arrays_info[displ].dimention;
 
 			node_set_next(nd);
 			info->variable_location = LFREE;
@@ -599,17 +632,31 @@ static void operand(information *const info, node *const nd)
 
 			if (info->answer_type == ACONST)
 			{
-				to_code_slice(info, displ, info->answer_const, 0);
+				to_code_slice(info, displ, info->answer_const, cur_dimension, 0, 0);
 			}
 			else if (info->answer_type == AREG)
 			{
-				to_code_slice(info, displ, info->answer_reg, 1);
+				to_code_slice(info, displ, info->answer_reg, cur_dimension, 0, 1);
 			}
+
+			item_t prev_slice = info->register_num - 1;
 
 			while (node_get_type(nd) == TSlice)
 			{
 				node_set_next(nd);
+				info->variable_location = LFREE;
 				expression(info, nd);
+				cur_dimension--;
+
+				if (info->answer_type == ACONST)
+				{
+					to_code_slice(info, displ, info->answer_const, cur_dimension, prev_slice, 0);
+				}
+				else if (info->answer_type == AREG)
+				{
+					to_code_slice(info, displ, info->answer_reg, cur_dimension, prev_slice, 1);
+				}
+				prev_slice = info->register_num - 1;
 			}
 
 			if (location != LMEM)
