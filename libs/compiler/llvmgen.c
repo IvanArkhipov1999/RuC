@@ -389,9 +389,14 @@ static void to_code_store_reg(information *const info, item_t reg, item_t displ,
 	uni_printf(info->io, ".%" PRIitem ", align 4\n", displ);
 }
 
-static inline void to_code_store_const_i32(information *const info, item_t arg, item_t displ)
+static void to_code_store_const_i32(information *const info, item_t arg, item_t displ, item_t mode_array)
 {
-	uni_printf(info->io, " store i32 %" PRIitem ", i32* %%var.%" PRIitem ", align 4\n", arg, displ);
+	uni_printf(info->io, " store i32 %" PRIitem ", i32* %%", arg);
+	if (!mode_array)
+	{
+		uni_printf(info->io, "var");
+	}
+	uni_printf(info->io, ".%" PRIitem ", align 4\n", displ);
 }
 
 static void to_code_store_const_double(information *const info, double arg, item_t displ)
@@ -480,41 +485,54 @@ static void to_code_slice(information *const info, const item_t id, const item_t
 							const item_t prev_slice, const item_t reg_mode)
 {
 	uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds ", info->register_num);
-	// uni_printf(info->io, " %%.%" PRIitem " = getelementptr inbounds [%" PRIitem " x i32], "
-	// 	"[%" PRIitem " x i32]* ", info->register_num, info->arrays_info[id].borders[0], info->arrays_info[id].borders[0]);
-	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
-	{
-		uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
-	}
-	uni_printf(info->io, "i32");
 
-	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+	if (info->arrays_info[id].is_static)
 	{
-		uni_printf(info->io, "]");
-	}
-	uni_printf(info->io, ", ");
+		for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+		{
+			uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
+		}
+		uni_printf(info->io, "i32");
 
-	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
-	{
-		uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
-	}
-	uni_printf(info->io, "i32");
+		for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+		{
+			uni_printf(info->io, "]");
+		}
+		uni_printf(info->io, ", ");
 
-	for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
-	{
-		uni_printf(info->io, "]");
-	}
+		for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+		{
+			uni_printf(info->io, "[%" PRIitem " x ", info->arrays_info[id].borders[i]);
+		}
+		uni_printf(info->io, "i32");
 
-	if (info->arrays_info[id].dimention == cur_dimension)
-	{
-		uni_printf(info->io, "* %%arr.%" PRIitem, id);
+		for (item_t i = info->arrays_info[id].dimention - cur_dimension; i < info->arrays_info[id].dimention; i++)
+		{
+			uni_printf(info->io, "]");
+		}
+
+		if (info->arrays_info[id].dimention == cur_dimension)
+		{
+			uni_printf(info->io, "* %%arr.%" PRIitem ", i32 0", id);
+		}
+		else
+		{
+			uni_printf(info->io, "* %%.%" PRIitem ", i32 0", prev_slice);
+		}
 	}
 	else
 	{
-		uni_printf(info->io, "* %%.%" PRIitem, prev_slice);
+		if (info->arrays_info[id].dimention == cur_dimension)
+		{
+			uni_printf(info->io, "i32, i32* %%dynarr.%" PRIitem, id);
+		}
+		else
+		{
+			uni_printf(info->io, "i32, i32* %%.%" PRIitem, prev_slice);
+		}
 	}
-	uni_printf(info->io, ", i32 0, i32 ");
 
+	uni_printf(info->io, ", i32 ");
 	if (reg_mode)
 	{
 		uni_printf(info->io, "%%.");
@@ -585,7 +603,7 @@ static void operand(information *const info, node *const nd)
 
 			if (info->variable_location == LMEM)
 			{
-				to_code_store_const_i32(info, num, info->request_reg);
+				to_code_store_const_i32(info, num, info->request_reg, 0);
 				info->answer_type = AREG;
 			}
 			else
@@ -629,6 +647,21 @@ static void operand(information *const info, node *const nd)
 			node_set_next(nd);
 			info->variable_location = LFREE;
 			expression(info, nd);
+
+			// TODO: пока только для динамических массивов размерности 2
+			if (!info->arrays_info[displ].is_static)
+			{
+				if (info->answer_type == ACONST)
+				{
+					to_code_operation_const_reg_i32(info, LMULT, info->answer_const, info->arrays_info[displ].borders[0]);
+				}
+				if (info->answer_type == AREG)
+				{
+					to_code_operation_reg_reg(info, LMULT, info->answer_reg, info->arrays_info[displ].borders[0], I32);
+				}
+				info->answer_type = AREG;
+				info->answer_reg = info->register_num++;
+			}
 
 			if (info->answer_type == ACONST)
 			{
@@ -788,7 +821,7 @@ static void assignment_expression(information *const info, node *const nd)
 	{
 		if (info->answer_value_type == I32)
 		{
-			to_code_store_const_i32(info, info->answer_const, displ);
+			to_code_store_const_i32(info, info->answer_const, displ, 0);
 		}
 		else // if (info->answer_value_type == DOUBLE)
 		{
@@ -814,6 +847,13 @@ static void assignment_array_expression(information *const info, node *const nd)
 	if (info->answer_type == AREG)
 	{
 		to_code_store_reg(info, result, memory_reg, info->answer_value_type, 1);
+	}
+	else // ACONST && =
+	{
+		if (info->answer_value_type == I32)
+		{
+			to_code_store_const_i32(info, info->answer_const, memory_reg, 1);
+		}
 	}
 }
 
