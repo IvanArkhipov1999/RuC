@@ -114,7 +114,6 @@ static expression_t expression_type(node *const nd)
 		case TIdenttoaddr:
 		case TConstd:
 		case TIdenttovald:
-		case TCall1:
 		case TSliceident:
 			return OPERAND;
 
@@ -159,6 +158,8 @@ static expression_t expression_type(node *const nd)
 		case DECATRV:
 
 		case UNMINUSR:
+
+		case TCall1:
 			return UNARY_OPERATION;
 
 
@@ -392,13 +393,6 @@ static int node_recursive(information *const info, node *const nd)
 				{
 					case OPERAND:
 					{
-						// TODO: а какая depth, если у вызова есть аргументы?
-						// это пока временное решение, с наличием агрументов будет другая реализация
-						// TODO: что-то не так при перестановке с x = func1d(); TIdent в начале выражения, а не после =
-						if (node_get_type(&child) == TCall1)
-						{
-							nd_info.depth = 2;
-						}
 						stack_push(info, &nd_info);
 					}
 					break;
@@ -414,6 +408,13 @@ static int node_recursive(information *const info, node *const nd)
 
 						// перестановка с операндом
 						has_error |= transposition(operand, &nd_info);
+						// TODO: а какая depth, если у вызова есть аргументы?
+						// это пока временное решение, с наличием агрументов будет другая реализация
+						// TODO: что-то не так при перестановке с x = func1d(); TIdent в начале выражения, а не после =
+						if (node_get_type(&child) == TCall1)
+						{
+							operand->depth++;
+						}
 						info->last_depth = operand->depth;
 
 						// добавляем в стек переставленное выражение
@@ -519,6 +520,12 @@ static void architecture(const workspace *const ws, universal_io *const io)
 		{
 			uni_printf(io, "target datalayout = \"e-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64\"\n");
 			uni_printf(io, "target triple = \"mipsel\"\n\n");
+			return;
+		}
+		else if (strcmp(flag, "--mips") == 0)
+		{
+			uni_printf(io, "target datalayout = \"E-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64\"\n");
+			uni_printf(io, "target triple = \"mips\"\n\n");
 			return;
 		}
 	}

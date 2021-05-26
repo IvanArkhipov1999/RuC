@@ -188,6 +188,8 @@ static void operation_to_io(universal_io *const io, const item_t type)
 		case PLUSASS:
 		case PLUSASSV:
 		case LPLUS:
+		case PLUSASSAT:
+		case PLUSASSATV:
 			uni_printf(io, "add nsw");
 			break;
 
@@ -199,42 +201,56 @@ static void operation_to_io(universal_io *const io, const item_t type)
 		case MINUSASSV:
 		case LMINUS:
 		case UNMINUS:
+		case MINUSASSAT:
+		case MINUSASSATV:
 			uni_printf(io, "sub nsw");
 			break;
 
 		case MULTASS:
 		case MULTASSV:
 		case LMULT:
+		case MULTASSAT:
+		case MULTASSATV:
 			uni_printf(io, "mul nsw");
 			break;
 
 		case DIVASS:
 		case DIVASSV:
 		case LDIV:
+		case DIVASSAT:
+		case DIVASSATV:
 			uni_printf(io, "sdiv");
 			break;
 
 		case REMASS:
 		case REMASSV:
 		case LREM:
+		case REMASSAT:
+		case REMASSATV:
 			uni_printf(io, "srem");
 			break;
 
 		case SHLASS:
 		case SHLASSV:
 		case LSHL:
+		case SHLASSAT:
+		case SHLASSATV:
 			uni_printf(io, "shl");
 			break;
 
 		case SHRASS:
 		case SHRASSV:
 		case LSHR:
+		case SHRASSAT:
+		case SHRASSATV:
 			uni_printf(io, "ashr");
 			break;
 
 		case ANDASS:
 		case ANDASSV:
 		case LAND:
+		case ANDASSAT:
+		case ANDASSATV:
 			uni_printf(io, "and");
 			break;
 
@@ -242,12 +258,16 @@ static void operation_to_io(universal_io *const io, const item_t type)
 		case EXORASSV:
 		case LEXOR:
 		case LNOT:
+		case EXORASSAT:
+		case EXORASSATV:
 			uni_printf(io, "xor");
 			break;
 
 		case ORASS:
 		case ORASSV:
 		case LOR:
+		case ORASSAT:
+		case ORASSATV:
 			uni_printf(io, "or");
 			break;
 
@@ -715,6 +735,7 @@ static void operand(information *const info, node *const nd)
 			const size_t ref_ident = (size_t)node_get_arg(nd, 0);
 			const item_t func_type = mode_get(info->sx, (size_t)ident_get_mode(info->sx, ref_ident) + 1);
 
+			node_set_next(nd); // TIdent
 			node_set_next(nd); // TCall2
 			if (func_type == mode_void)
 			{
@@ -811,9 +832,10 @@ static void assignment_expression(information *const info, node *const nd)
 		}
 			
 		result = info->register_num++;
+		info->answer_type = AREG;
 	}
 
-	if (info->answer_type == AREG || (assignment_type != ASS && assignment_type != ASSV && assignment_type != ASSR && assignment_type != ASSRV))
+	if (info->answer_type == AREG)
 	{
 		to_code_store_reg(info, result, displ, info->answer_value_type, 0);
 	}
@@ -829,9 +851,10 @@ static void assignment_expression(information *const info, node *const nd)
 		}
 	}
 }
-
+// TODO: попробовать объединить с assignment_expression
 static void assignment_array_expression(information *const info, node *const nd)
 {
+	const item_t assignment_type = node_get_type(nd);
 	node_set_next(nd);
 	info->variable_location = LMEM;
 	operand(info, nd); // TSliceident
@@ -843,6 +866,24 @@ static void assignment_array_expression(information *const info, node *const nd)
 	to_code_try_zext_to(info);
 
 	item_t result = info->answer_reg;
+
+	if (assignment_type != ASSAT && assignment_type != ASSATV)
+	{
+		to_code_load(info, info->register_num, memory_reg, I32, 1);
+		info->register_num++;
+
+		if (info->answer_type == AREG)
+		{
+			to_code_operation_reg_reg(info, assignment_type, info->register_num - 1, info->answer_reg, info->answer_value_type);
+		}
+		else // ACONST
+		{
+			to_code_operation_reg_const_i32(info, assignment_type, info->register_num - 1, info->answer_const);
+		}
+
+		result = info->register_num++;
+		info->answer_type = AREG;
+	}
 
 	if (info->answer_type == AREG)
 	{
@@ -1190,7 +1231,16 @@ static void binary_operation(information *const info, node *const nd)
 
 
 		case ASSAT:
+		case PLUSASSAT:
+		case MINUSASSAT:
+		case MULTASSAT:
+		case DIVASSAT:
+
 		case ASSATV:
+		case PLUSASSATV:
+		case MINUSASSATV:
+		case MULTASSATV:
+		case DIVASSATV:
 			assignment_array_expression(info, nd);
 			break;
 
