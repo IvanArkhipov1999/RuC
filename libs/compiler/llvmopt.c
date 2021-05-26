@@ -408,12 +408,19 @@ static int node_recursive(information *const info, node *const nd)
 
 						// перестановка с операндом
 						has_error |= transposition(operand, &nd_info);
-						// TODO: а какая depth, если у вызова есть аргументы?
-						// это пока временное решение, с наличием агрументов будет другая реализация
-						// TODO: что-то не так при перестановке с x = func1d(); TIdent в начале выражения, а не после =
+
+						
+						// TODO: тут, по-моему, ужасный костыль (а может и нет, вроде нормально работает)
+						// TODO: проблемы, если вызов функции в выражении
 						if (node_get_type(&child) == TCall1)
 						{
-							operand->depth++;
+							node tmp = child;
+							while (node_get_type(&tmp) != TCall2)
+							{
+								node_set_next(&tmp);
+								operand->depth++;
+							}
+							operand->depth--;
 						}
 						info->last_depth = operand->depth;
 
