@@ -462,7 +462,7 @@ void optimize_for_statement()
 		has_nested_for = 1 - tree[tc];
 		mcopy();
 	}
-
+	
 	if (has_nested_for)
 	{
 		while (tree[tc] != TFor)

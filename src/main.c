@@ -22,7 +22,7 @@
 #include "defs.h"
 
 
-const char *name = "/Users/elias/test.c";
+const char *name = "/home/ivan-arhipych/RuC/tests/mips/optimizations/productivity/big_matrix200.c";
 
 
 // Определение глобальных переменных
@@ -55,13 +55,13 @@ int defarr[MAXIDENTAB];
 int bad_printf_placeholder = 0;
 
 // optimization flags
-int cycle_jump_reduce = 1;
-int enable_ind_var = 1;
-int cycle_condition_calculation = 1;
-int delay_slot = 1;
+int cycle_jump_reduce = 0;
+int enable_ind_var = 0;
+int cycle_condition_calculation = 0;
+int delay_slot = 0;
 int check_nested_for;
-int ind_var_reduction = 1;
-int enable_unswitch_loop = 1;
+int ind_var_reduction = 0;
+int enable_unswitch_loop = 0;
 
 extern void preprocess_file();
 
