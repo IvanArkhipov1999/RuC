@@ -456,17 +456,23 @@ void optimize_for_statement()
 	int m_for_start = mtc;
 	mcopy(); // TFor
 
+	// Проводим оптимизации только для самых вложенных циклов
+	// Поэтому без флажка просто все пропускаем
 	if (check_nested_for)
 	{
 		mark_nested_for();
 		has_nested_for = 1 - tree[tc];
 		mcopy();
 	}
-	
+	else
+	{
+		while (tree[tc] != TForEnd) mcopy();
+		return;
+	}
+
 	if (has_nested_for)
 	{
-		while (tree[tc] != TFor)
-			mcopy();
+		while (tree[tc] != TFor) mcopy();
 		return;
 	}
 
