@@ -22,11 +22,7 @@
 #include "defs.h"
 
 
-const char *name = "/home/ivan-arhipych/RuC/tests/mips/float.c";
-// "tests/Mishatest.c";
-// "../../../tests/Egor/Macro/for.c";
-// "../../../tests/Fadeev/Signal.c";
-// "../../../tests/Golovan/dining_philosophers.c";
+const char *name = "/Users/elias/test.c";
 
 
 // Определение глобальных переменных
@@ -59,12 +55,13 @@ int defarr[MAXIDENTAB];
 int bad_printf_placeholder = 0;
 
 // optimization flags
-int cycle_jump_reduce = 0;
-int enable_ind_var = 0;
-int cycle_condition_calculation = 0;
-int delay_slot = 0;
+int cycle_jump_reduce = 1;
+int enable_ind_var = 1;
+int cycle_condition_calculation = 1;
+int delay_slot = 1;
 int check_nested_for;
-int ind_var_reduction = 0;
+int ind_var_reduction = 1;
+int enable_unswitch_loop = 1;
 
 extern void preprocess_file();
 
@@ -106,13 +103,13 @@ FILE *keywords(const char *const exec)
     {
         if (exec[i] == '\\' || exec[i] == '/')
         {
-            last_slash = i + 1;
+            last_slash = i;
         }
 
         path[i] = exec[i];
     }
 
-    strcpy(&path[last_slash], "keywords.txt");
+    strcpy(&path[last_slash + 1], "keywords.txt");
     return fopen(path, "r");
 }
 
@@ -120,7 +117,7 @@ int main(int argc, const char * argv[])
 {
     int i;
 
-	check_nested_for = cycle_condition_calculation || enable_ind_var || ind_var_reduction;
+	check_nested_for = cycle_condition_calculation || enable_ind_var || ind_var_reduction || enable_unswitch_loop;
 
     if (argc != 2){
         printf("Error: not enough argumnts\n");
