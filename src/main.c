@@ -22,7 +22,7 @@
 #include "defs.h"
 
 
-const char *name = "/home/ivan-arhipych/RuC/tests/mips/optimizations/productivity/big_matrix200.c";
+const char *name = "/home/ivan-arhipych/RuC/tests/mips/optimizations/productivity/big_matrix800.c";
 
 
 // Определение глобальных переменных
