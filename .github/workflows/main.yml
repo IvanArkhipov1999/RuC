@@ -1,8 +1,8 @@
 name: testing
-on: [push]
+on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v1
       - name: Run test script
