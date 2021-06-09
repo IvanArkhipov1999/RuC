@@ -1,8 +1,9 @@
 name: testing
 on: [push]
 jobs:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Run test script
-    run: ./scripts/test.sh
-    shell: bash
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run test script
+        run: ./scripts/test.sh
+        shell: bash
