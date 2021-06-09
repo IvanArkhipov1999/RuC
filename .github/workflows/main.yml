@@ -2,7 +2,7 @@ name: testing
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - name: Run test script
